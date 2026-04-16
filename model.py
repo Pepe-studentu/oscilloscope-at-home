@@ -12,8 +12,8 @@ from adc import ADC
 
 # constants:
 H_SCALE_MIN = 0.1  # minimum samples-per-pixel (maximum zoom in)
-H_SCALE_MAX = 3.0  # maximum samples-per-pixel (maximum zoom out)
-SAFETY_MARGIN = 10  # number of samples kept between reading and writing in the ring buffer
+H_SCALE_MAX = 3  # maximum samples-per-pixel (maximum zoom out)
+SAFETY_MARGIN = 2000  # number of samples kept between reading and writing in the ring buffer
 D = 840  # display buffer size
 N = round(D * H_SCALE_MAX) + SAFETY_MARGIN  # ring buffer size: enough for the most zoomed-out view
 
@@ -128,6 +128,7 @@ class Model:
             if recompute_mean:
                 self._recompute_mean = False
         trigger_idx_snapshot = self.trigger_idx[0]
+        
 
         samples_per_pixel = h_scale_snapshot
         effective_sample_count = round(D * samples_per_pixel)
@@ -149,6 +150,15 @@ class Model:
 
         while (self.write_head[0] - trigger_idx_snapshot) % N < end_offset:
             time.sleep(0)  # yield GIL to acquisition thread
+
+        # head is past the end index; make sure it's not past the start index too
+        start_offset = (start_idx - trigger_idx_snapshot) % N
+        w_off = (self.write_head[0] - trigger_idx_snapshot) % N
+        if w_off >= start_offset:
+            print(f"CORRUPT: write past start by {(w_off - start_offset)} samples")
+        else:
+            print(f"OK: write head is {(start_offset - w_off)} samples before start")
+
 
         if start_idx < end_idx:
             samples = np.copy(self.ring_buffer[start_idx:end_idx])
